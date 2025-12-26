@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Muscle Car Collect Tracker</title>
+    <style>
+        body { background: #0a0a0a; color: #fff; font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #ff0000; font-size: 28px; }
+        #searchContainer { text-align: center; margin: 20px; }
+        #search { width: 85%; max-width: 600px; padding: 12px; font-size: 18px; background: #222; color: #fff; border: 2px solid #ff0000; border-radius: 8px; }
+        #searchResults { background: #222; max-height: 300px; overflow-y: auto; margin: 10px auto; width: 85%; max-width: 600px; border: 1px solid #444; border-radius: 8px; }
+        .result { padding: 12px; cursor: pointer; border-bottom: 1px solid #444; }
+        .result:hover { background: #ff0000; }
+        .garages { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
+        .garage { background: #1a1a1a; border: 3px solid #ff0000; padding: 15px; width: 380px; border-radius: 12px; position: relative; }
+        .garage h2 { margin: 0 0 10px; color: #ff6666; text-align: center; }
+        .clear-garage { position: absolute; top: 10px; right: 10px; background: #f00; padding: 5px 10px; cursor: pointer; font-size: 14px; border-radius: 5px; }
+        .car { background: #333; padding: 15px; margin-bottom: 15px; min-height: 80px; text-align: center; font-size: 20px; border-radius: 8px; cursor: pointer; position: relative; }
+        .stats { text-align: center; font-size: 26px; margin: 15px 0; color: #ffff00; font-weight: bold; }
+        .mods { display: flex; justify-content: space-between; }
+        .slot { background: #000 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 160"><rect width="120" height="160" fill="#000"/><text x="60" y="80" font-size="30" text-anchor="middle" fill="#ff0000">SLOT</text></svg>') no-repeat center/cover; width: 110px; height: 150px; margin: 5px; cursor: pointer; display: flex; align-items: flex-end; justify-content: center; font-size: 14px; color: #fff; text-shadow: 1px 1px 2px #000; border-radius: 8px; position: relative; }
+        .slot.filled { background: #333; }
+        .plus, .minus { position: absolute; background: #f00; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; cursor: pointer; }
+        .plus { bottom: 10px; right: 10px; }
+        .minus { top: 10px; right: 10px; display: none; }
+        .slot.filled .minus { display: flex; }
+        button { background: #ff0000; color: #fff; border: none; padding: 12px 24px; margin: 20px 10px; cursor: pointer; font-size: 18px; border-radius: 8px; }
+        @media (max-width: 800px) { .garages { flex-direction: column; align-items: center; } .garage { width: 95%; } }
+    </style>
+</head>
+<body>
+    <h1>Muscle Car Collect Tracker</h1>
+    <div id="searchContainer">
+        <input type="text" id="search" placeholder="Search car, modification, or Protection Card..." autocomplete="off">
+        <div id="searchResults"></div>
+    </div>
+
+    <div class="garages" id="garages"></div>
+
+    <div style="text-align: center;">
+        <button onclick="saveGarages()">Save Garages</button>
+        <button onclick="loadGarages()">Load Garages</button>
+        <button onclick="clearAll()">Clear All Garages</button>
+    </div>
+
+    <script>
+        // Full database (114 cars + 49 modifications + protection placeholder)
+        const database = {
+            cars: [
+                {name: "1963 Chevrolet Corvette Stingray", rarity: "Legendary", spd: 6, acc: 5, hndl: 6, brk: 3, flavor: "'63 Stingray, split-window sports legend.", type: "car"},
+                {name: "1964 Chevrolet Malibu SS", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'64 Malibu SS, Chevelle's sporty debut.", type: "car"},
+                {name: "1964 Pontiac GTO", rarity: "Legendary", spd: 4, acc: 6, hndl: 5, brk: 5, flavor: "'64 GTO, muscle car originator.", type: "car"},
+                {name: "1965 Buick Skylark GS", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'65 Skylark GS, Buick's early gran sport.", type: "car"},
+                {name: "1965 Shelby Mustang GT350 R", rarity: "Timeless", spd: 6, acc: 6, hndl: 5, brk: 3, flavor: "Shelby's '65 track-tuned Mustang legend.", type: "car"},
+                {name: "1966 Dodge Coronet 500", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'66 Coronet 500, mid-size Mopar cruiser.", type: "car"},
+                {name: "1966 Shelby Mustang GT 350H", rarity: "Iconic", spd: 6, acc: 6, hndl: 4, brk: 4, flavor: "'66 GT350H Mustang, Hertz rental racer.", type: "car"},
+                {name: "1967 Chevrolet Camaro SS 350", rarity: "Iconic", spd: 5, acc: 6, hndl: 4, brk: 5, flavor: "'67 Camaro SS 350, first-gen V8 icon.", type: "car"},
+                {name: "1967 Chevorlet Chevelle SS 396", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'67 Chevelle SS 396, big-block cruiser.", type: "car"},
+                {name: "1967 Mercury Cougar XR7 GT 390", rarity: "Classic", spd: 4, acc: 5, hndl: 6, brk: 5, flavor: "'67 Cougar XR7 GT 390, luxury pony.", type: "car"},
+                {name: "1967 Plymouth Barracuda S Formula", rarity: "Common", spd: 5, acc: 4, hndl: 6, brk: 7, flavor: "'67 Barracuda Formula S, Valiant pony.", type: "car"},
+                {name: "1967 Pontiac GTO", rarity: "Classic", spd: 4, acc: 6, hndl: 5, brk: 5, flavor: "'67 GTO, Pontiac's muscle benchmark.", type: "car"},
+                {name: "1968 AMC Javelin SST", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'68 Javelin SST, AMC's pony challenger.", type: "car"},
+                {name: "1968 Ford Mustang GT", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'68 Mustang GT, pony car staple.", type: "car"},
+                {name: "1968 Ford Mustang Shelby GT500", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'68 Shelby GT500, Cobra Jet king.", type: "car"},
+                {name: "1968 Shelby Mustang GT500 KR (Convertible)", rarity: "Iconic", spd: 6, acc: 5, hndl: 5, brk: 4, flavor: "'68 GT500 KR Convertible, Shelby king.", type: "car"},
+                {name: "1969 AMC SC/ Rambler - Group A", rarity: "Iconic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'69 AMC SC/Rambler, patriotic muscle rebel.", type: "car"},
+                {name: "1969 Chevrolet Camaro SS 396", rarity: "Timeless", spd: 5, acc: 6, hndl: 5, brk: 4, flavor: "'69 Camaro SS, V8 street dominator.", type: "car"},
+                {name: "1969 Chevrolet Corvette Stingray ZL1", rarity: "Iconic", spd: 6, acc: 5, hndl: 5, brk: 4, flavor: "'69 Stingray ZL1, rare aluminum V8.", type: "car"},
+                {name: "1969 Chevy COPo Camaro ZL1 427", rarity: "Classic", spd: 5, acc: 6, hndl: 4, brk: 5, flavor: "'69 COPO ZL1 Camaro, aluminum big-block.", type: "car"},
+                {name: "1969 Dodge Charger", rarity: "Iconic", spd: 5, acc: 5, hndl: 6, brk: 4, flavor: "'69 Charger, Mopar muscle classic.", type: "car"},
+                {name: "1969 Dodge Charger Daytona", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'69 Charger Daytona, winged aero warrior.", type: "car"},
+                {name: "1969 Dodge Coronet R/T Hemi", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'69 Coronet R/T Hemi, street hemi hauler.", type: "car"},
+                {name: "1969 Ford Mustang Boss 429", rarity: "Timeless", spd: 6, acc: 5, hndl: 4, brk: 5, flavor: "'69 Boss 429 Mustang muscle king.", type: "car"},
+                {name: "1969 Oldsmobile 442 W30", rarity: "Iconic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'69 442 W30, Olds ram air performer.", type: "car"},
+                {name: "1969 Pontiac Trans Am 400", rarity: "Timeless", spd: 6, acc: 5, hndl: 5, brk: 4, flavor: "'69 Trans Am 400, Pontiac performer.", type: "car"},
+                {name: "1970 AMC AMX", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'70 AMX, short-wheelbase AMC muscle.", type: "car"},
+                {name: "1970 Buick Skylark GSX Stage 1", rarity: "Timeless", spd: 5, acc: 6, hndl: 4, brk: 5, flavor: "'70 GSX Stage 1, Buick torque monster.", type: "car"},
+                {name: "1970 Chevrolet Chevelle SS 454", rarity: "Timeless", spd: 4, acc: 7, hndl: 4, brk: 5, flavor: "'70 Chevelle SS with big-block torque.", type: "car"},
+                {name: "1970 Chevrolet Monte Carlo SS 454", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'70 Monte Carlo SS 454, personal luxury muscle.", type: "car"},
+                {name: "1970 Chevrolet Nova SS 396", rarity: "Iconic", spd: 5, acc: 6, hndl: 4, brk: 5, flavor: "'70 Nova SS 396, compact big-block.", type: "car"},
+                {name: "1970 Dodge Challenger R/T Hemi 426", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'70 Challenger R/T Hemi, E-body legend.", type: "car"},
+                {name: "1970 Dodge Charger 500 HEMI", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'70 Charger 500 HEMI, aero-tuned beast.", type: "car"},
+                {name: "1970 Dodge Dart Swinger 340", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'70 Dart Swinger 340, compact Mopar muscle.", type: "car"},
+                {name: "1970 Ford Mustang Boss 302", rarity: "Iconic", spd: 5, acc: 5, hndl: 6, brk: 4, flavor: "'70 Boss 302 Mustang, high-rev racer.", type: "car"},
+                {name: "1970 Mercury Cyclone Spoiler", rarity: "Common", spd: 4, acc: 6, hndl: 4, brk: 7, flavor: "'70 Cyclone Spoiler, winged Ford intermediate.", type: "car"},
+                {name: "1970 Plymouth barracuda 440 Six Pack", rarity: "Iconic", spd: 6, acc: 5, hndl: 4, brk: 5, flavor: "'70 'Cuda 440 Six Pack powerhouse.", type: "car"},
+                {name: "1970 Plymouth Cuda 340", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'70 'Cuda 340, small-block street fighter.", type: "car"},
+                {name: "1970 Plymouth Superbird Hemi 426", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'70 Superbird Hemi, winged NASCAR homologation.", type: "car"},
+                {name: "1970 Pontiac GTO", rarity: "Common", spd: 5, acc: 4, hndl: 5, brk: 7, flavor: "'70 Pontiac GTO, third-gen muscle icon.", type: "car"},
+                {name: "1970 Pontiac GTO Judge", rarity: "Iconic", spd: 4, acc: 6, hndl: 5, brk: 5, flavor: "'70 GTO Judge, Pontiac's street verdict.", type: "car"},
+                {name: "1970 Pontiac GTO Judge 400 Ram Air IV", rarity: "Legendary", spd: 5, acc: 7, hndl: 4, brk: 4, flavor: "'70 GTO Judge Ram Air powerhouse.", type: "car"},
+                {name: "1971 Chevrolet Malibu SS 454", rarity: "Common", spd: 5, acc: 4, hndl: 4, brk: 7, flavor: "'71 Malibu SS 454, Chevy intermediate muscle.", type: "car"},
+                {name: "1971 Ford Torino Cobra SCJ", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'71 Torino Cobra SCJ, big-block Ford.", type: "car"},
+                {name: "1971 Plymouth Cuda Hemi 426", rarity: "Common", spd: 5, acc: 5, hndl: 6, brk: 7, flavor: "'71 'Cuda Hemi 426, E-body pinnacle.", type: "car"},
+                {name: "1971 Plymouth Road Runner", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'71 Road Runner, Mopar cartoon icon.", type: "car"},
+                {name: "1972 Chevrolet Camaro Z28", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'72 Camaro Z28, second-gen rally sport.", type: "car"},
+                {name: "1972 Ford Maverick Grabber", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'72 Maverick Grabber, compact Ford fun.", type: "car"},
+                {name: "1972 Plymouth Road Runner 340", rarity: "Common", spd: 6, acc: 4, hndl: 4, brk: 7, flavor: "'72 Road Runner 340, B-body lightweight.", type: "car"},
+                {name: "1974 Pontiac Firebird Super Duty 455 Trans Am", rarity: "Legendary", spd: 6, acc: 4, hndl: 5, brk: 5, flavor: "'74 Super Duty Trans Am icon.", type: "car"},
+                {name: "1974 Pontiac Firebird Super-Duty 455", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'74 Super Duty Firebird, big-block survivor.", type: "car"},
+                {name: "1978 Chevrolet Malibu", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'78 Malibu, downsized Chevy classic.", type: "car"},
+                {name: "1978 Pontiac Firebird Trans AM", rarity: "Iconic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'78 Trans Am, screaming eagle icon.", type: "car"},
+                {name: "1981 Yenko Camaro Turbo Z", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'81 Yenko Turbo Z Camaro, tuned rarity.", type: "car"},
+                {name: "1983 Chevrolet Corvette", rarity: "Iconic", spd: 6, acc: 5, hndl: 6, brk: 3, flavor: "'83 C4 Corvette, digital dash innovator.", type: "car"},
+                {name: "1983 Mercury Capri RS-50", rarity: "Common", spd: 6, acc: 4, hndl: 4, brk: 7, flavor: "'83 Capri RS-50, Fox-body Mercury variant.", type: "car"},
+                {name: "1983 Oldsmobile Hurst Olds", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'83 Hurst/Olds, Cutlass lightning rod shifter.", type: "car"},
+                {name: "1984 Chevrolet Monte Carlo SS", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'84 Monte Carlo SS, aero-nose performer.", type: "car"},
+                {name: "1984 Pontiac Firebird Trans AM", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'84 Trans Am, third-gen Pontiac firebird.", type: "car"},
+                {name: "1985 Ford Mustang GT 5.0", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'85 Mustang GT 5.0, Fox-body fox.", type: "car"},
+                {name: "1985 Oldsmobile Cutlass 442", rarity: "Common", spd: 4, acc: 6, hndl: 6, brk: 7, flavor: "'85 Cutlass 442, G-body Olds revival.", type: "car"},
+                {name: "1986 Pontiac Grand Prix 2+2", rarity: "Common", spd: 6, acc: 6, hndl: 5, brk: 6, flavor: "'86 Grand Prix 2+2, aerodynamic Pontiac.", type: "car"},
+                {name: "1987 Buick Grand National GNX (Turbo)", rarity: "Iconic", spd: 5, acc: 6, hndl: 5, brk: 4, flavor: "'87 GNX Buick, turbocharged black menace.", type: "car"},
+                {name: "1987 Ford Thunderbird Turbo", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'87 Thunderbird Turbo Coupe, aero turbo bird.", type: "car"},
+                {name: "1989 Ford Mustang LX 5.0", rarity: "Iconic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'89 Mustang LX 5.0, Fox-body performer.", type: "car"},
+                {name: "1989 Ford Thunderbird SC", rarity: "Common", spd: 5, acc: 4, hndl: 5, brk: 7, flavor: "'89 Thunderbird SC, supercharged aero bird.", type: "car"},
+                {name: "1989 Pontiac Firebird Turbo TRANS AM", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'89 Turbo Trans Am, Indy Pace turbo.", type: "car"},
+                {name: "1991 Dodge Stealth RT Twin Turbo", rarity: "Common", spd: 4, acc: 5, hndl: 4, brk: 7, flavor: "'91 Stealth RT, Mitsubishi-Dodge stealth fighter.", type: "car"},
+                {name: "1992 Chevrolet Camaro Z28", rarity: "Iconic", spd: 5, acc: 5, hndl: 6, brk: 4, flavor: "'92 Z28 Camaro, third-gen anniversary edition.", type: "car"},
+                {name: "1993 Ford Mustang SVT Cobra R", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'93 SVT Cobra R, track-stripped Mustang.", type: "car"},
+                {name: "1993 Oldsmobile Achieva SCX W41", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'93 Achieva SCX W41, Olds quad-4 sport.", type: "car"},
+                {name: "1995 Pontiac SLP Formula Firehawk", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'95 Firehawk Formula, SLP-tuned Pontiac.", type: "car"},
+                {name: "1996 Chevrolet Impala SS", rarity: "Iconic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'96 Impala SS, LT1-powered sedan beast.", type: "car"},
+                {name: "1996 Pontiac Firebird Trans AM WS6", rarity: "Common", spd: 4, acc: 5, hndl: 6, brk: 7, flavor: "'96 Trans Am WS6, Ram Air Firebird.", type: "car"},
+                {name: "1997 Chevrolet Corvette C5", rarity: "Timeless", spd: 6, acc: 5, hndl: 6, brk: 3, flavor: "'97 C5 Corvette, grand touring evolution.", type: "car"},
+                {name: "1997 Plymouth Prowler", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'97 Prowler, retro hot rod roadster.", type: "car"},
+                {name: "1998 Lincoln Mark VIII", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'98 Mark VIII, luxury V8 grand tourer.", type: "car"},
+                {name: "1999 Dodge Viper", rarity: "Classic", spd: 6, acc: 5, hndl: 5, brk: 4, flavor: "'99 Viper, V10 American supercar.", type: "car"},
+                {name: "2000 Mustang SVT Cobra R", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'00 SVT Cobra R, race-ready Mustang.", type: "car"},
+                {name: "2002 Chevrolet Camaro SS", rarity: "Common", spd: 6, acc: 4, hndl: 5, brk: 7, flavor: "'02 Camaro SS, fourth-gen V8 revival.", type: "car"},
+                {name: "2005 Chrysler 300C SRT-8", rarity: "Iconic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'05 300C SRT-8, Hemi luxury bruiser.", type: "car"},
+                {name: "2005 Ford Mustang GT", rarity: "Common", spd: 5, acc: 5, hndl: 4, brk: 7, flavor: "'05 Mustang GT, S197 platform powerhouse.", type: "car"},
+                {name: "2006 Chevrolet Corvette Z06", rarity: "Common", spd: 5, acc: 4, hndl: 3, brk: 7, flavor: "'06 Z06 Corvette, LS7 dry-sump screamer.", type: "car"},
+                {name: "2006 Dodge Magnum SRT8", rarity: "Common", spd: 3, acc: 5, hndl: 6, brk: 7, flavor: "'06 Magnum SRT8, wagon with Hemi bite.", type: "car"},
+                {name: "2006 Pontiac GTO", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'06 GTO, LS2-powered Aussie import.", type: "car"},
+                {name: "2007 Ford Mustang Shelby GT500", rarity: "Common", spd: 6, acc: 5, hndl: 4, brk: 7, flavor: "'07 Shelby GT500, supercharged S197 king.", type: "car"},
+                {name: "2008 Dodge Challenger SRT-8", rarity: "Timeless", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'08 Challenger SRT-8 revival powerhouse.", type: "car"},
+                {name: "2008 Dodge Viper ACR", rarity: "Classic", spd: 6, acc: 5, hndl: 4, brk: 5, flavor: "'08 Viper ACR, track-tuned serpent.", type: "car"},
+                {name: "2008 Shelby Mustang GT500KR-1", rarity: "Common", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'08 GT500KR Mustang, king of road revival.", type: "car"},
+                {name: "2009 Corvette ZR1", rarity: "Iconic", spd: 7, acc: 5, hndl: 4, brk: 4, flavor: "'09 ZR1 Corvette, supercharged speed king.", type: "car"},
+                {name: "2010 Chevrolet Camaro SS", rarity: "Common", spd: 4, acc: 5, hndl: 5, brk: 7, flavor: "'10 Camaro SS, fifth-gen LS3 muscle.", type: "car"},
+                {name: "2011 Mustang GT", rarity: "Classic", spd: 5, acc: 5, hndl: 5, brk: 5, flavor: "'11 Mustang GT, Coyote V8 revival.", type: "car"},
+                {name: "2012 Ford Mustang Boss 302", rarity: "Common", spd: 5, acc: 4, hndl: 6, brk: 7, flavor: "'12 Boss 302, track-tuned Coyote revival.", type: "car"},
+                {name: "2013 Dodge Viper SRT", rarity: "Timeless", spd: 7, acc: 4, hndl: 5, brk: 4, flavor: "'13 Viper SRT, raw American venom.", type: "car"},
+                {name: "2014 Chevrolet Camaro Z/28", rarity: "Common", spd: 4, acc: 6, hndl: 6, brk: 7, flavor: "'14 Z/28 Camaro, track-focused LS7.", type: "car"},
+                {name: "2015 Dodge Charger Hellcat", rarity: "Timeless", spd: 7, acc: 6, hndl: 3, brk: 4, flavor: "'15 Hellcat Charger, supercharged fury.", type: "car"},
+                {name: "2015 Dodge Challenger SRT Hellcat", rarity: "Classic", spd: 6, acc: 6, hndl: 4, brk: 4, flavor: "'15 Hellcat Challenger, supercharged menace.", type: "car"},
+                {name: "2016 Ford Mustang GT350R", rarity: "Common", spd: 6, acc: 5, hndl: 7, brk: 6, flavor: "'16 GT350R, flat-plane Voodoo track beast.", type: "car"},
+                {name: "2017 Dodge Challenger SRT Demon", rarity: "Classic", spd: 7, acc: 7, hndl: 3, brk: 3, flavor: "'17 SRT Demon, drag demon unleashed.", type: "car"},
+                {name: "2018 Dodge Challenger SRT Demon", rarity: "Legendary", spd: 7, acc: 7, hndl: 3, brk: 3, flavor: "'18 SRT Demon, drag strip devil.", type: "car"},
+                {name: "2019 Cadillac CTS-V", rarity: "Iconic", spd: 6, acc: 6, hndl: 4, brk: 4, flavor: "'19 CTS-V, supercharged luxury rocket.", type: "car"},
+                {name: "2019 Chevrolet Camaro ZL1 1LE", rarity: "Common", spd: 5, acc: 4, hndl: 7, brk: 7, flavor: "'19 ZL1 1LE Camaro, extreme track package.", type: "car"},
+                {name: "2020 Chevrolet Corvette Stingray Z51", rarity: "Common", spd: 6, acc: 5, hndl: 6, brk: 6, flavor: "'20 Stingray Z51, mid-engine marvel.", type: "car"},
+                {name: "2020 Dodge Charger SRT Hellcat", rarity: "Common", spd: 3, acc: 5, hndl: 5, brk: 7, flavor: "'20 Charger SRT Hellcat, supercharged sedan.", type: "car"},
+                {name: "2020 Dodge Challenger Redeye Hellcat Widebody", rarity: "Iconic", spd: 6, acc: 6, hndl: 3, brk: 5, flavor: "'20 Redeye Hellcat Widebody demon.", type: "car"},
+                {name: "2020 Ford Mustang Shelby GT500", rarity: "Common", spd: 7, acc: 6, hndl: 4, brk: 6, flavor: "'20 Shelby GT500, 760-hp supercharged apex.", type: "car"},
+                {name: "2021 Chevrolet Camaro ZL1", rarity: "Common", spd: 6, acc: 5, hndl: 5, brk: 7, flavor: "'21 ZL1 Camaro, supercharged track terror.", type: "car"},
+                {name: "2023 Chrysler 300C", rarity: "Common", spd: 5, acc: 4, hndl: 4, brk: 7, flavor: "'23 300C, final Hemi luxury cruiser.", type: "car"},
+                {name: "2023 Dodge Challenger SRT Demon", rarity: "Iconic", spd: 7, acc: 7, hndl: 3, brk: 3, flavor: "'23 SRT Demon, ultimate drag machine.", type: "car"},
+                {name: "2024 Chevrolet Camaro LT1", rarity: "Iconic", spd: 5, acc: 6, hndl: 4, brk: 5, flavor: "'24 Camaro LT1, V8 street warrior.", type: "car"},
+                {name: "2024 Ford Mustang Dark Horse", rarity: "Iconic", spd: 6, acc: 5, hndl: 5, brk: 4, flavor: "'24 Dark Horse Mustang, track-tuned performer.", type: "car"}
+            ],
+            mods: [
+                {name: "Nitrous Oxide Injection System", spd: 3, acc: 0, hndl: -1, brk: 0, type: "mod"},
+                {name: "Premium Fuel Map", spd: 3, acc: 0, hndl: 0, brk: -2, type: "mod"},
+                {name: "Supercharger / Turbocharger Kits", spd: 2, acc: 0, hndl: -1, brk: 0, type: "mod"},
+                {name: "High Flow Intake / Cold Air Intakes", spd: 2, acc: 0, hndl: 0, brk: 0, type: "mod"},
+                {name: "High Flow Cylinder Heads / Port and Polish", spd: 2, acc: 0, hndl: 0, brk: 0, type: "mod"},
+                {name: "Higher Lift Camshafts", spd: 2, acc: 0, hndl: 0, brk: 0, type: "mod"},
+                {name: "Headers and Free-Flow Exhaust", spd: 2, acc: 1, hndl: 0, brk: 0, type: "mod"},
+                {name: "ECU Tuning / Chip Programming", spd: 1, acc: 0, hndl: 0, brk: 0, type: "mod"},
+                {name: "Lower Rear End Gear Ratios", spd: 3, acc: -2, hndl: 0, brk: 0, type: "mod"},
+                {name: "Weight Reduction", spd: 2, acc: 1, hndl: 0, brk: -1, type: "mod"},
+                {name: "High Flow Carburetor", spd: 0, acc: 3, hndl: 0, brk: 0, type: "mod"},
+                {name: "Sticky Drag Radial Tires", spd: 0, acc: 2, hndl: -1, brk: 0, type: "mod"},
+                {name: "Launch Control via Tuned ECU", spd: 0, acc: 1, hndl: 0, brk: 0, type: "mod"},
+                {name: "Lower Numerical Rear End Ratio", spd: -2, acc: 3, hndl: 0, brk: 0, type: "mod"},
+                {name: "Lightweight Drive Shaft and Flywheel", spd: 1, acc: 1, hndl: 0, brk: 0, type: "mod"},
+                {name: "Aftermarket Axles and Limited Slip Differential", spd: 0, acc: 2, hndl: 0, brk: 0, type: "mod"},
+                {name: "Wheelie Bars for Rear Wheel Traction", spd: 0, acc: 1, hndl: 0, brk: 0, type: "mod"},
+                {name: "Increased Boost from Supercharger / Turbocharger", spd: 1, acc: 3, hndl: -1, brk: 0, type: "mod"},
+                {name: "Upgraded Steering Rack", spd: 0, acc: 0, hndl: 1, brk: 0, type: "mod"},
+                {name: "Sport Suspension", spd: 0, acc: 0, hndl: 2, brk: 1, type: "mod"},
+                {name: "Upgraded Sway Bars and End Links", spd: 0, acc: 0, hndl: 2, brk: 0, type: "mod"},
+                {name: "Adjustable Coilover Shocks and Springs", spd: 0, acc: 0, hndl: 3, brk: 0, type: "mod"},
+                {name: "Strut Tower Braces and Chassis Bracing", spd: 0, acc: 0, hndl: 1, brk: 0, type: "mod"},
+                {name: "Wider Sticky Tires", spd: -1, acc: 0, hndl: 3, brk: 0, type: "mod"},
+                {name: "Lightweight Wheels", spd: 0, acc: 1, hndl: 1, brk: 0, type: "mod"},
+                {name: "Upgraded Bushings", spd: 0, acc: 0, hndl: 1, brk: 0, type: "mod"},
+                {name: "Limited Slip Differential", spd: 0, acc: 1, hndl: 3, brk: 0, type: "mod"},
+                {name: "Race Alignment (Camber, Caster, etc.)", spd: 0, acc: -1, hndl: 3, brk: 0, type: "mod"},
+                {name: "Front and Rear Spoilers", spd: 1, acc: 0, hndl: 2, brk: 0, type: "mod"},
+                {name: "Disc Brake Conversion", spd: 0, acc: 1, hndl: 0, brk: 3, type: "mod"},
+                {name: "Big Brake Kits with Larger Rotors", spd: 0, acc: -1, hndl: 0, brk: 3, type: "mod"},
+                {name: "High Performance Brake Pads", spd: 0, acc: 0, hndl: 0, brk: 2, type: "mod"},
+                {name: "Stainless Steel Brake Lines", spd: 0, acc: 0, hndl: 0, brk: 1, type: "mod"},
+                {name: "Slotted / Cross Drilled Brake Rotors", spd: 0, acc: 0, hndl: 0, brk: 1, type: "mod"},
+                {name: "Multi Piston Brake Calipers", spd: 0, acc: 0, hndl: 0, brk: 3, type: "mod"},
+                {name: "Brake Cooling Ducts Directing Airflow", spd: 0, acc: 0, hndl: 0, brk: 2, type: "mod"},
+                {name: "Race Brake Fluid for Higher Boiling Point", spd: 0, acc: 0, hndl: 0, brk: 1, type: "mod"},
+                {name: "Brake Bias Adjustment for Weight Distribution", spd: 0, acc: 0, hndl: 0, brk: 2, type: "mod"},
+                {name: "Brake Proportioning Valve Adjustment", spd: 0, acc: 0, hndl: 0, brk: 1, type: "mod"}
+            ],
+            protection: [
+                {name: "Protection Card", spd: 0, acc: 0, hndl: 0, brk: 0, flavor: "Generic protection placeholder.", type: "protection"}
+            ]
+        };
+
+        // Garage state
+        let garages = Array(3).fill().map(() => ({ car: null, mods: Array(3).fill(null) }));
+
+        // Render
+        function render() {
+            const container = document.getElementById('garages');
+            container.innerHTML = '';
+            garages.forEach((g, i) => {
+                const div = document.createElement('div');
+                div.className = 'garage';
+                const carText = g.car ? `${g.car.name}<br><small>${g.car.flavor}</small>` : 'Empty Car Slot';
+                div.innerHTML = `
+                    <h2>Garage ${i+1}</h2>
+                    <div class="clear-garage" onclick="clearGarage(${i})">Clear Garage</div>
+                    <div class="car" onclick="openSearchForSlot('car', ${i})">
+                        ${carText}
+                        <div class="minus" onclick="event.stopPropagation(); clearSlot('car', ${i})">-</div>
+                        <div class="plus">+</div>
+                    </div>
+                    <div class="stats">SPD: ${calc('spd', i)} | ACC: ${calc('acc', i)} | HNDL: ${calc('hndl', i)} | BRK: ${calc('brk', i)}</div>
+                    <div class="mods">
+                        ${g.mods.map((m, j) => `
+                            <div class="slot ${m ? 'filled' : ''}" onclick="openSearchForSlot('mod', ${i}, ${j})">
+                                ${m ? m.name : 'Mod ' + (j+1)}
+                                <div class="minus" onclick="event.stopPropagation(); clearSlot('mod', ${i}, ${j})">-</div>
+                                <div class="plus">+</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function calc(stat, i) {
+            let total = garages[i].car ? garages[i].car[stat] || 0 : 0;
+            garages[i].mods.forEach(m => total += m ? m[stat] || 0 : 0);
+            return total;
+        }
+
+        // Search with slot type filtering
+        let currentSlot = null;
+        document.getElementById('search').addEventListener('input', e => {
+            const q = e.target.value.toLowerCase();
+            const res = document.getElementById('searchResults');
+            res.innerHTML = q.length < 2 ? '' : '';
+            if (q.length < 2) return;
+
+            let list = [];
+            if (!currentSlot || currentSlot.type === 'car') list = list.concat(database.cars);
+            if (!currentSlot || currentSlot.type === 'mod') list = list.concat(database.mods, database.protection);
+
+            list.filter(c => c.name.toLowerCase().includes(q)).slice(0, 10).forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'result';
+                div.textContent = c.name;
+                div.onclick = () => addToCurrentSlot(c);
+                res.appendChild(div);
+            });
+        });
+
+        function openSearchForSlot(type, garage, slot = null) {
+            currentSlot = {type, garage, slot};
+            document.getElementById('search').value = '';
+            document.getElementById('searchResults').innerHTML = '';
+            document.getElementById('search').focus();
+        }
+
+        function addToCurrentSlot(card) {
+            if (!currentSlot) return;
+            const {type, garage, slot} = currentSlot;
+            if (type === 'car' && card.type !== 'car') {
+                alert('Only cars allowed in car slot!');
+                return;
+            }
+            if (type === 'mod' && card.type === 'car') {
+                alert('Only modifications or protection allowed in mod slots!');
+                return;
+            }
+            if (type === 'car') garages[garage].car = card;
+            else garages[garage].mods[slot] = card;
+            document.getElementById('search').value = '';
+            document.getElementById('searchResults').innerHTML = '';
+            currentSlot = null;
+            render();
+            saveGarages();
+        }
+
+        // Clear functions
+        function clearSlot(type, garage, slot = null) {
+            if (type === 'car') garages[garage].car = null;
+            else garages[garage].mods[slot] = null;
+            render();
+            saveGarages();
+        }
+
+        function clearGarage(i) {
+            garages[i] = {car: null, mods: Array(3).fill(null)};
+            render();
+            saveGarages();
+        }
+
+        function clearAll() {
+            garages = Array(3).fill().map(() => ({ car: null, mods: Array(3).fill(null) }));
+            render();
+            saveGarages();
+        }
+
+        // Save/Load
+        function saveGarages() { localStorage.setItem('mccGarages', JSON.stringify(garages)); }
+        function loadGarages() { 
+            const s = localStorage.getItem('mccGarages');
+            if (s) garages = JSON.parse(s);
+            render();
+        }
+
+        loadGarages();
+    </script>
+</body>
+</html>
+
